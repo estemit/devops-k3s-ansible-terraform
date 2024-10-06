@@ -1,4 +1,4 @@
-- ## ---This repo was created as part of a DevOps Assesment---
+## ---This repo was created as part of a DevOps Assesment---
 
 #### Hello, today we are going to automate the entire process of provisioning and configuring a High Availability and fully compliant Kubernetes distribution, providing an easy, repeatable way to create a k3s cluster that you can run in just a few minutes.
 
