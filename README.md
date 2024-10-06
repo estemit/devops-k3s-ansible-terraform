@@ -24,7 +24,7 @@ Our Kubernetes cluster will be a 3 node HA setup (High Availability with [etcd](
 
 All the source code including this guide can also be found on my GitHub repo here:
 
-- [ ] https://github.com/estemit/devops
+- [ ] https://github.com/estemit/devops-k3s-ansible-terraform
 
 Let’s get started!
 
@@ -52,8 +52,8 @@ It's easier to clone the repo and have all the code ready on the machine:
 
 ```
 sudo apt install git
-git clone https://github.com/estemit/devops.git
-cd devops
+git clone https://github.com/estemit/devops-k3s-ansible-terraform.git
+cd devops-k3s-ansible-terraform
 ```
 
 Also, we will need to provision our nodes with a SSH key for ansible to do it's thing. Create one now with the command bellow and hit enter for everything:
@@ -367,5 +367,54 @@ In order for a Kubernetes cluster to be considered production ready, the followi
 - _Logging and Monitoring_ - central logging implementation like OpenTelemetry with Elastic Search will drastically speed up the time it takes to debug a critical issue within a cluster or the applications that run inside it. A central monitoring solution based on Prometheus and Grafana will vastly increase the visibility of the performance of the cluster and the applications inside of it. However, these implementations take a lot more time to plan and implement.  
 
 - ## Bonus - k8s cluster with Vagrant
+<a name="bonus"></a>
+There is also a vagrant DIR so let's check it out:
 
-There is also a vagrant DIR 
+```
+cd vagrant
+```
+
+Let's quickly install Vagrant and VirtualBox on our machine:
+
+```
+wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update && sudo apt install vagrant virtualbox -y
+```
+
+If you are doing this on the same machine we used until now we need to add KVM hypervisor to the deny list in order for VirtualBox to run correctly and then reboot our machine:
+
+```
+lsmod | grep kvm
+echo 'blacklist kvm-intel' | sudo tee -a /etc/modprobe.d/blacklist.conf
+sudo reboot
+```
+
+In order to let Vagrant create private networks we need to run this command:
+
+```
+sudo mkdir -p /etc/vbox/ && sudo touch /etc/vbox/networks.conf && echo '* 0.0.0.0/0 ::/0' | sudo tee -a /etc/vbox/networks.conf
+```
+
+Let's bring our cluster UP:
+
+```
+vagrant up
+```
+
+After a long wait, we should now have our k8s cluster provisioned with Calico Network Plugin, Metrics server, and Kubernetes dashboard configured using only a `Vagrant file` and some `bash scripts`.
+
+Lets hop on the `controlplane` node of our k8s cluster:
+
+```
+vagrant ssh controlplane
+```
+
+Now we can interact with our new Kubernetes cluster using `kubectl`:
+
+```
+kubectl get nodes -o wide
+kubectl get pods -A -o wide
+```
+
+Great Success!!!
