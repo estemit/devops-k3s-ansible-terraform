@@ -1,0 +1,54 @@
+---
+- name: Deploy certmanager to cluster
+  when: ansible_hostname == hostvars[groups[group_name_master | default('master')][0]]['ansible_hostname']
+  run_once: true
+  block:
+    - name: Create manifests directory on first master
+      ansible.builtin.file:
+        path: /tmp/k3s
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: "Download to first master: manifest for certmanager installation"
+      ansible.builtin.get_url:
+        url: https://github.com/cert-manager/cert-manager/releases/download/{{ certmanager_tag_version }}/cert-manager.yaml
+        dest: /tmp/k3s/certmanager.yaml
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy or replace certmanager
+      block:
+        - name: Deploy certmanager
+          ansible.builtin.command:
+            cmd: "{{ k3s_kubectl_binary | default('k3s kubectl') }} create -f /tmp/k3s/certmanager.yaml"
+          register: create_certmanager
+          changed_when: "'created' in create_certmanager.stdout"
+          failed_when: "'Error' in create_certmanager.stderr and 'already exists' not in create_certmanager.stderr"
+      rescue:
+        - name: Replace existing certmanager
+          ansible.builtin.command:
+            cmd: "{{ k3s_kubectl_binary | default('k3s kubectl') }} replace -f /tmp/k3s/certmanager.yaml"
+          register: replace_certmanager
+          changed_when: "'replaced' in replace_certmanager.stdout"
+          failed_when: "'Error' in replace_certmanager.stderr"
+
+    - name: Wait for certmanager resources
+      ansible.builtin.command: >-
+        {{ k3s_kubectl_binary | default('k3s kubectl') }} wait {{ item.type }}/{{ item.name }}
+        --namespace='cert-manager'
+        --for=condition=Available=True
+        --timeout=30s
+      register: certmanager_result
+      changed_when: false
+      until: certmanager_result is succeeded
+      retries: 7
+      delay: 7
+      with_items:
+        - { name: cert-manager, type: deployment }
+      loop_control:
+        label: "{{ item.type }}/{{ item.name }}"
+
+

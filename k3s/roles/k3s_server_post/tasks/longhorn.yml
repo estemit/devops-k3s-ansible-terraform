@@ -1,0 +1,54 @@
+---
+- name: Deploy Longhorn to cluster
+  when: ansible_hostname == hostvars[groups[group_name_master | default('master')][0]]['ansible_hostname']
+  run_once: true
+  block:
+    - name: Create manifests directory on first master
+      ansible.builtin.file:
+        path: /tmp/k3s
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: "Download to first master: manifest for Longhorn installation"
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/longhorn/longhorn/{{ longhorn_tag_version }}/deploy/longhorn.yaml
+        dest: /tmp/k3s/longhorn.yaml
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy or replace Longhorn
+      block:
+        - name: Deploy Longhorn
+          ansible.builtin.command:
+            cmd: "{{ k3s_kubectl_binary | default('k3s kubectl') }} create -f /tmp/k3s/longhorn.yaml"
+          register: create_longhorn
+          changed_when: "'created' in create_longhorn.stdout"
+          failed_when: "'Error' in create_longhorn.stderr and 'already exists' not in create_longhorn.stderr"
+      rescue:
+        - name: Replace existing Longhorn
+          ansible.builtin.command:
+            cmd: "{{ k3s_kubectl_binary | default('k3s kubectl') }} replace -f /tmp/k3s/longhorn.yaml"
+          register: replace_longhorn
+          changed_when: "'replaced' in replace_longhorn.stdout"
+          failed_when: "'Error' in replace_longhorn.stderr"
+
+    - name: Wait for Longhorn resources
+      ansible.builtin.command: >-
+        {{ k3s_kubectl_binary | default('k3s kubectl') }} wait {{ item.type }}/{{ item.name }}
+        --namespace='longhorn-system'
+        --for=condition=Available=True
+        --timeout=30s
+      register: longhorn_result
+      changed_when: false
+      until: longhorn_result is succeeded
+      retries: 7
+      delay: 7
+      with_items:
+        - { name: longhorn-driver-deployer, type: deployment }
+      loop_control:
+        label: "{{ item.type }}/{{ item.name }}"
+
+
